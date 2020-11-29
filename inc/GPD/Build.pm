@@ -18,12 +18,33 @@ GetOptions(
 sub new {
     my $class = shift;
     my $debug_flag = $DEBUG ? ' -g' : '';
+
+    my @upb_libs = shellwords(Alien::libupb_legacy->libs_static);
+    my @pb_libs  = shellwords(Alien::Protobuf3_1_0->libs_static);
+
+    my @extra_linker_flags;
+    my @extra_lddl_flags;
+    foreach my $part ( @upb_libs, @pb_libs ) {
+        if ( $part =~ m<\Q$Config{lib_ext}\E\z> ) {
+            # libprotobuf.a, goes at the end of the linker invocation
+            push @extra_linker_flags, $part;
+        }
+        else {
+            # anything else, e.g. -lz, goes before the objects being linked
+            push @extra_lddl_flags, $part;
+        }
+
+        if ( $part =~ /\B-L(\S+)/ ) {
+            my $library_path = $1;
+            push @extra_lddl_flags, '-Wl,-rpath=' . $library_path;
+        }
+    }
     my $self = $class->SUPER::new(
         @_,
         extra_typemap_modules => {
             'ExtUtils::Typemaps::STL::String' => '0',
         },
-        extra_linker_flags => [grep /\Q$Config{lib_ext}\E\z/, map shellwords($_), Alien::libupb_legacy->libs_static, Alien::Protobuf3_1_0->libs_static],
+        extra_linker_flags   => \@extra_linker_flags,
         extra_compiler_flags => [$debug_flag, Alien::libupb_legacy->cflags, Alien::Protobuf3_1_0->cflags, Alien::Protobuf3_1_0->cxxflags, "-DPERL_NO_GET_CONTEXT"],
         script_files => [qw(scripts/protoc-gen-perl-gpd)],
     );
@@ -31,7 +52,7 @@ sub new {
     # if we ar statically linking against libprotobuf/libupb, then the
     #   -L/dir -lprotobuf
     # flags need to come before the objects being linked:
-    $self->config(lddlflags => join(" ", $Config{lddlflags}, Alien::libupb_legacy->libs, Alien::Protobuf3_1_0->libs_static));
+    $self->config(lddlflags => join(" ", $Config{lddlflags}, @extra_lddl_flags));
 
     # we are linking against C++ libraries (libprotobuf, upb), and possibly
     # *statically* linking against them -- so we must use g++/clang++ etc to
