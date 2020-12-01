@@ -45,7 +45,16 @@ sub new {
             'ExtUtils::Typemaps::STL::String' => '0',
         },
         extra_linker_flags   => \@extra_linker_flags,
-        extra_compiler_flags => [$debug_flag, Alien::libupb_legacy->cflags, Alien::Protobuf3_1_0->cflags, Alien::Protobuf3_1_0->cxxflags, "-DPERL_NO_GET_CONTEXT"],
+        extra_compiler_flags => [
+            $debug_flag,
+            Alien::libupb_legacy->cflags,
+            Alien::Protobuf3_1_0->cflags,
+            Alien::Protobuf3_1_0->cxxflags,
+            "-DPERL_NO_GET_CONTEXT",
+            # libprotobuf REQUIRES C11; ->cxxflags above should be giving us
+            # this, but it's not smart enough yet.
+            '-std=c++11',
+        ],
         script_files => [qw(scripts/protoc-gen-perl-gpd)],
     );
 
